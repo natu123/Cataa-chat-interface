@@ -1,6 +1,6 @@
 # Cataa — Multi-party CLI Chat Interface
 
-**Cataa** is a PowerShell CLI chat application enabling 3-party conversations between **Gles**, **Lavi**, and **Loa**.
+Cataa is a Rust CLI chat shell where humans and AI agents talk together in the same terminal.
 
 > Cataa is also a reference design for future chat UI layers in the [Yunin](https://github.com/natu123/yunin-ai-workspace) project.
 
