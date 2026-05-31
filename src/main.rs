@@ -1,6 +1,41 @@
 use colored::Colorize;
 use std::io::{self, BufRead, Write};
+use std::path::PathBuf;
 use std::process::Command;
+use chrono::Local;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
+struct Turn {
+    timestamp: String,
+    gles: String,
+    lavi: String,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+struct Memory {
+    conversations: Vec<Turn>,
+}
+
+fn memory_path() -> PathBuf {
+    PathBuf::from("lavi_memory.json")
+}
+
+fn load_memory() -> Memory {
+    let path = memory_path();
+    if let Ok(data) = std::fs::read_to_string(&path) {
+        serde_json::from_str(&data).unwrap_or_default()
+    } else {
+        Memory::default()
+    }
+}
+
+fn save_memory(memory: &Memory) {
+    let path = memory_path();
+    if let Ok(json) = serde_json::to_string_pretty(memory) {
+        let _ = std::fs::write(&path, json);
+    }
+}
 
 const MAX_NAME: usize = 4;
 
@@ -68,6 +103,7 @@ fn main() {
     let stdin = io::stdin();
     let mut stdout = io::stdout();
     let mut turn = 0u32;
+    let mut memory = load_memory();
 
     loop {
         print!("{}", "Gles : ".green().bold());
@@ -89,7 +125,15 @@ fn main() {
         let lavi_reply = lavi_respond(input);
         print_message("Lavi", &lavi_reply);
 
-        // Loa responds (with context of both Gles and Lavi)
+        // save to memory
+        memory.conversations.push(Turn {
+            timestamp: Local::now().format("%Y-%m-%dT%H:%M:%S").to_string(),
+            gles: input.to_string(),
+            lavi: lavi_reply.clone(),
+        });
+        save_memory(&memory);
+
+        // Loa responds
         let prompt = format!("Gles : {}\nLavi : {}", input, lavi_reply);
         let loa_reply = ask_loa(&prompt, turn == 0);
         print_message("Loa", &loa_reply);
