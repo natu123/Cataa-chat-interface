@@ -58,9 +58,3 @@ This preserves the full conversation context — Loa sees both Gles and Lavi as 
 - [lavi-continual-learning](https://github.com/natu123/lavi-continual-learning) — the AI that Cataa talks to
 - [yunin-ai-workspace](https://github.com/natu123/yunin-ai-workspace) — future integration target
 
----
-
-## Author
-
-**Gles** (増田 賢治) — [@____natu______](https://x.com/____natu______)  
-Designed by Gles. Implemented by Loa (Claude Code).
