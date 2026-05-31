@@ -5,6 +5,72 @@ use std::process::Command;
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 
+// ── ES params ────────────────────────────────────────────────
+#[derive(Serialize, Deserialize)]
+struct LaviParams {
+    responses: Vec<String>,
+    weights:   Vec<f64>,
+}
+
+impl Default for LaviParams {
+    fn default() -> Self {
+        LaviParams {
+            responses: vec![
+                "Hello.".into(),
+                "Hi.".into(),
+                "I see.".into(),
+                "Tell me more.".into(),
+                "Interesting.".into(),
+            ],
+            weights: vec![1.0, 1.0, 1.0, 1.0, 1.0],
+        }
+    }
+}
+
+fn params_path() -> PathBuf { PathBuf::from("lavi_params.json") }
+
+fn load_params() -> LaviParams {
+    if let Ok(data) = std::fs::read_to_string(params_path()) {
+        serde_json::from_str(&data).unwrap_or_default()
+    } else {
+        LaviParams::default()
+    }
+}
+
+fn save_params(p: &LaviParams) {
+    if let Ok(json) = serde_json::to_string_pretty(p) {
+        let _ = std::fs::write(params_path(), json);
+    }
+}
+
+// weighted random selection
+fn select_response(p: &LaviParams) -> (usize, String) {
+    let total: f64 = p.weights.iter().sum();
+    // simple LCG-style seed from system time
+    let seed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(42) as f64;
+    let r = (seed % 1_000_000.0) / 1_000_000.0 * total;
+    let mut cum = 0.0;
+    for (i, w) in p.weights.iter().enumerate() {
+        cum += w;
+        if r <= cum {
+            return (i, p.responses[i].clone());
+        }
+    }
+    let last = p.responses.len() - 1;
+    (last, p.responses[last].clone())
+}
+
+// ES update: reward/penalise the chosen response based on Loa reply length
+fn es_update(p: &mut LaviParams, chosen: usize, loa_reply: &str) {
+    let score = loa_reply.chars().count();
+    let delta = if score >= 30 { 0.1 } else { -0.05 };
+    p.weights[chosen] = (p.weights[chosen] + delta).max(0.1);
+    save_params(p);
+}
+
 #[derive(Serialize, Deserialize)]
 struct Turn {
     timestamp: String,
@@ -56,8 +122,8 @@ fn print_message(speaker: &str, text: &str) {
     }
 }
 
-fn lavi_respond(_input: &str) -> String {
-    "Hello.".to_string()
+fn lavi_respond(_input: &str, params: &LaviParams) -> (usize, String) {
+    select_response(params)
 }
 
 fn ask_loa(prompt: &str, is_first: bool) -> String {
@@ -104,6 +170,7 @@ fn main() {
     let mut stdout = io::stdout();
     let mut turn = 0u32;
     let mut memory = load_memory();
+    let mut params = load_params();
 
     loop {
         print!("{}", "Gles : ".green().bold());
@@ -134,9 +201,18 @@ fn main() {
         }
         let input = lines.join("\n");
 
-        // Lavi responds
-        let lavi_reply = lavi_respond(&input);
+        // Lavi responds (ES weighted selection)
+        let (chosen, lavi_reply) = lavi_respond(&input, &params);
         print_message("Lavi", &lavi_reply);
+
+        // Loa responds
+        let prompt = format!("Gles : {}\nLavi : {}", input, lavi_reply);
+        let loa_reply = ask_loa(&prompt, turn == 0);
+        print_message("Loa", &loa_reply);
+        println!();
+
+        // ES update
+        es_update(&mut params, chosen, &loa_reply);
 
         // save to memory
         memory.conversations.push(Turn {
@@ -145,12 +221,6 @@ fn main() {
             lavi: lavi_reply.clone(),
         });
         save_memory(&memory);
-
-        // Loa responds
-        let prompt = format!("Gles : {}\nLavi : {}", input, lavi_reply);
-        let loa_reply = ask_loa(&prompt, turn == 0);
-        print_message("Loa", &loa_reply);
-        println!();
 
         turn += 1;
     }
