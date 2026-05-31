@@ -45,8 +45,8 @@ fn print_message(speaker: &str, text: &str) {
         if i == 0 {
             let prefix = match speaker {
                 "Gles" => format!("{} : ", "Gles".green().bold()),
-                "Lavi" => format!("{} : ", "Lavi".cyan().bold()),
-                "Loa"  => format!("{}  : ", "Loa".yellow().bold()),
+                "Lavi" => format!("{} : ", "Lavi".yellow().bold()),
+                "Loa"  => format!("{}  : ", "Loa".purple().bold()),
                 _      => format!("{} : ", speaker),
             };
             println!("{}{}", prefix, line);
@@ -61,7 +61,7 @@ fn lavi_respond(_input: &str) -> String {
 }
 
 fn ask_loa(prompt: &str, is_first: bool) -> String {
-    print!("{}", "Loa  : ".yellow().bold());
+    print!("{}", "Loa  : ".purple().bold());
     io::stdout().flush().unwrap();
 
     let system = "You are Loa, a participant in a 3-party chat with Gles (human) and Lavi (a growing AI). Respond naturally and briefly as Loa. No meta-commentary about the system.";
@@ -95,12 +95,12 @@ fn main() {
     println!("{}", "─".repeat(40).dimmed());
     println!("{}", "  Cataa  —  chat with Lavi and Loa".bold());
     println!("{}", "─".repeat(40).dimmed());
-    println!("{}", "  Type your message and press Enter.".dimmed());
-    println!("{}", "  Ctrl+C to exit.".dimmed());
+    println!("{}", "  Type your message. Blank line to send. Ctrl+C to exit.".dimmed());
     println!("{}", "─".repeat(40).dimmed());
     println!();
 
     let stdin = io::stdin();
+    let mut stdin_lock = stdin.lock();
     let mut stdout = io::stdout();
     let mut turn = 0u32;
     let mut memory = load_memory();
@@ -109,20 +109,33 @@ fn main() {
         print!("{}", "Gles : ".green().bold());
         stdout.flush().unwrap();
 
-        let mut input = String::new();
-        match stdin.lock().read_line(&mut input) {
-            Ok(0) => break,
-            Ok(_) => {}
-            Err(_) => break,
+        // collect lines until blank line
+        let mut lines: Vec<String> = Vec::new();
+        loop {
+            let mut line = String::new();
+            match stdin_lock.read_line(&mut line) {
+                Ok(0) => return,
+                Ok(_) => {}
+                Err(_) => return,
+            }
+            let trimmed = line.trim_end_matches(['\n', '\r']).to_string();
+            if trimmed.is_empty() {
+                break; // blank line = send
+            }
+            if !lines.is_empty() {
+                print!("{}", " ".repeat(MAX_NAME + 3));
+                stdout.flush().unwrap();
+            }
+            lines.push(trimmed);
         }
 
-        let input = input.trim_end_matches(['\n', '\r']);
-        if input.is_empty() {
+        if lines.is_empty() {
             continue;
         }
+        let input = lines.join("\n");
 
         // Lavi responds
-        let lavi_reply = lavi_respond(input);
+        let lavi_reply = lavi_respond(&input);
         print_message("Lavi", &lavi_reply);
 
         // save to memory
